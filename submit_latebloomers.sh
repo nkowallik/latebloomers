@@ -1,6 +1,6 @@
 #!/bin/bash
 # submit-job.sh - Submit a job to the SLURM cluster
-# Usage: ./submit-job.sh "<command>" [--gpu] [--name <job-name>]
+# Usage: ./submit-job.sh "<command>" [--gpu] [--flwrdatasets] [--name <job-name>]
 # Example: ./submit-job.sh "flwr run" --gpu
 # Evaluation: ./submit-job.sh "evaluate.py" --gpu
 
@@ -10,16 +10,18 @@ REPO_DIR="$HOME/latebloomers"
 # Check if coldstart directory exists
 [ ! -d "$REPO_DIR" ] && { echo "Error: Directory $REPO_DIR does not exist"; exit 1; }
 
-[ $# -lt 1 ] && { echo "Usage: $0 \"<command>\" [--gpu] [--name <job-name>]"; exit 1; }
+[ $# -lt 1 ] && { echo "Usage: $0 \"<command>\" [--gpu] [--flwrdatasets] [--name <job-name>]"; exit 1; }
 
 COMMAND=$1; shift
 NAME_SUFFIX=""
+USE_FLWR_DATASETS=false
 CPUS=8; MEM=46G; QOS=cpu_qos; PARTITION_ARGS="#SBATCH --partition=cpu"; VENV_NAME="hackathon-venv-cpu"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --gpu) CPUS=6; MEM=120G; QOS=gpu_qos; PARTITION_ARGS="#SBATCH --gres=gpu:1
 #SBATCH --partition=gpu"; VENV_NAME="hackathon-venv"; shift ;;
+    --flwrdatasets) USE_FLWR_DATASETS=true; shift ;;
     --name) NAME_SUFFIX="$2"; shift 2 ;;
     *) shift ;;
   esac
@@ -76,6 +78,11 @@ export JOB_SCRATCH="\${SLURM_TMPDIR:-\${TMPDIR:-/tmp}}/job-\${SLURM_JOB_ID}"
 export MIOPEN_CUSTOM_CACHE_DIR="\$JOB_SCRATCH/miopen-cache"
 export MIOPEN_USER_DB_PATH="\$JOB_SCRATCH/miopen-db"
 export XDG_CACHE_HOME="\$JOB_SCRATCH/xdg-cache"
+
+# Set FLWR_DATASETS flag if requested
+if [ "${USE_FLWR_DATASETS}" = "true" ]; then
+  export USE_FLWR_DATASETS=1
+fi
 
 mkdir -p /home/${USER}/models "\$JOB_SCRATCH" "\$MIOPEN_CUSTOM_CACHE_DIR" "\$MIOPEN_USER_DB_PATH" "\$XDG_CACHE_HOME"
 

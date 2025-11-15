@@ -11,6 +11,8 @@ from app_pytorch.task import train as train_fn
 # Flower ClientApp
 app = ClientApp()
 
+# iteration
+
 
 @app.train()
 def train(msg: Message, context: Context):
@@ -67,6 +69,8 @@ def evaluate(msg: Message, context: Context):
         model,
         valloader,
         device,
+        "metrics_client.json",
+        1
     )
 
     # Construct and return reply Message

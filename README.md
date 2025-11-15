@@ -1,4 +1,4 @@
-Sadly we do not have the trained model or evaluation data since we ran out of time :(
+Sadly, we do not have the trained model or evaluation data since we ran out of time :(
 
 The Project is based on the app-pytorch.
 ---

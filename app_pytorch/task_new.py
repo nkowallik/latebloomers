@@ -95,24 +95,33 @@ def load_centralized_dataset():
     return DataLoader(dataset, batch_size=32)
 
 
-def train(net, trainloader, epochs, lr, device):
-    """Train the model on the training set."""
-    net.to(device)  # move model to GPU if available
-    criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-    net.train()
-    running_loss = 0.0
-    for _ in range(epochs):
-        for batch in trainloader:
-            images = batch["img"].to(device)
-            labels = batch["label"].to(device)
+def train_model(model, dataset, batch_size=64, epochs=1, lr=3e-4, device='cpu'):
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    model.to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0
+        correct = 0
+        total = 0
+        for X_batch, Y_batch in loader:
+            X_batch = X_batch.to(device)
+            Y_batch = Y_batch.to(device)
             optimizer.zero_grad()
-            loss = criterion(net(images), labels)
+            outputs = model(X_batch)
+            loss = criterion(outputs, Y_batch)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
-    avg_trainloss = running_loss / len(trainloader)
-    return avg_trainloss
+
+            total_loss += loss.item() * X_batch.size(0)
+            preds = outputs.argmax(dim=1)
+            correct += (preds == Y_batch).sum().item()
+            total += X_batch.size(0)
+
+        print(f"Epoch {epoch+1}/{epochs} - Loss: {total_loss/total:.4f}, Accuracy: {correct/total:.4f}")
+        return total_loss
 
 def save_metrics_to_json(precision, recall, f1, accuracy, loss, filepath, iteration):
     if os.path.exists(filepath):

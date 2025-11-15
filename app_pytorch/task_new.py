@@ -67,32 +67,46 @@ def apply_transforms(batch):
     return batch
 
 
-def load_data(partition_id: int, num_partitions: int):
-    """Load partition CIFAR10 data."""
-    # Only initialize `FederatedDataset` once
-    global fds
-    if fds is None:
-        partitioner = IidPartitioner(num_partitions=num_partitions)
-        fds = FederatedDataset(
-            dataset="uoft-cs/cifar10",
-            partitioners={"train": partitioner},
-        )
-    partition = fds.load_partition(partition_id)
-    # Divide data on each node: 80% train, 20% test
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
-    # Construct dataloaders
-    partition_train_test = partition_train_test.with_transform(apply_transforms)
-    trainloader = DataLoader(partition_train_test["train"], batch_size=32, shuffle=True)
-    testloader = DataLoader(partition_train_test["test"], batch_size=32)
+import torch
+from torch.utils.data import TensorDataset, DataLoader, random_split
+
+# Global variable to hold the dataset
+fds = None
+
+def load_centralized_dataset_from_pt(pt_file: str):
+    """
+    Load the entire dataset from a .pt file and return a DataLoader for testing.
+    """
+    data_dict = torch.load(pt_file)
+    features = data_dict['features']
+    labels = data_dict['labels']
+
+    dataset = TensorDataset(features, labels)
+    return DataLoader(dataset, batch_size=32)
+
+
+def load_data(partition_file: str):
+    """
+    Load partition data from a .pt file for federated training.
+    Each partition file corresponds to one client.
+    """
+    data_dict = torch.load(partition_file)
+    features = data_dict['features']
+    labels = data_dict['labels']
+
+    dataset = TensorDataset(features, labels)
+
+    # Split 80% train, 20% test for each partition
+    n_total = len(dataset)
+    n_train = int(0.8 * n_total)
+    n_test = n_total - n_train
+    train_dataset, test_dataset = random_split(dataset, [n_train, n_test])
+
+    trainloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    testloader = DataLoader(test_dataset, batch_size=32)
+
     return trainloader, testloader
 
-
-def load_centralized_dataset():
-    """Load test set and return dataloader."""
-    # Load entire test set
-    test_dataset = load_dataset("uoft-cs/cifar10", split="test")
-    dataset = test_dataset.with_format("torch").with_transform(apply_transforms)
-    return DataLoader(dataset, batch_size=32)
 
 
 def train_model(model, dataset, batch_size=64, epochs=1, lr=3e-4, device='cpu'):

@@ -1,49 +1,43 @@
-"""app-pytorch: A Flower / PyTorch app."""
+"""app-pytorch: A Flower / PyTorch client for HDFS logs."""
 
 import torch
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
-from app_pytorch.task import Net, load_data
-from app_pytorch.task import test as test_fn
-from app_pytorch.task import train as train_fn
+from app_pytorch.task import NeuralLogTransformer, load_data, train_model, test
 
+# -----------------------
 # Flower ClientApp
+# -----------------------
 app = ClientApp()
-
-# iteration
 
 
 @app.train()
 def train(msg: Message, context: Context):
-    """Train the model on local data."""
+    """Train the model on local HDFS partition."""
 
-    # Load the model and initialize it with the received weights
-    model = Net()
+    # Load the model with received weights
+    embed_dim = 768       # match your features dimension
+    num_classes = 2       # adjust if needed
+    max_len = 75          # sequence length
+    model = NeuralLogTransformer(embed_dim=embed_dim, num_classes=num_classes, max_len=max_len)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    # Load the data
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    trainloader, _ = load_data(partition_id, num_partitions)
+    # Load local partition
+    partition_file = context.node_config["partition-file"]  # each client has its .pt file
+    trainloader, _ = load_data(partition_file)
 
-    # Call the training function
-    train_loss = train_fn(
-        model,
-        trainloader,
-        context.run_config["local-epochs"],
-        msg.content["config"]["lr"],
-        device,
-    )
+    # Train the model
+    local_epochs = context.run_config.get("local-epochs", 1)
+    lr = msg.content.get("config", {}).get("lr", 0.01)
+    train_model(model, trainloader, epochs=local_epochs, lr=lr, device=device)
 
-    # Construct and return reply Message
+    # Return updated model and metrics
     model_record = ArrayRecord(model.state_dict())
-    metrics = {
-        "train_loss": train_loss,
-        "num-examples": len(trainloader.dataset),
-    }
+    metrics = {"num-examples": len(trainloader.dataset)}
     metric_record = MetricRecord(metrics)
     content = RecordDict({"arrays": model_record, "metrics": metric_record})
     return Message(content=content, reply_to=msg)
@@ -51,33 +45,35 @@ def train(msg: Message, context: Context):
 
 @app.evaluate()
 def evaluate(msg: Message, context: Context):
-    """Evaluate the model on local data."""
+    """Evaluate the model on local HDFS partition."""
 
-    # Load the model and initialize it with the received weights
-    model = Net()
+    # Load model with received weights
+    embed_dim = 768
+    num_classes = 2
+    max_len = 75
+    model = NeuralLogTransformer(embed_dim=embed_dim, num_classes=num_classes, max_len=max_len)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    # Load the data
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    _, valloader = load_data(partition_id, num_partitions)
+    # Load local partition for evaluation
+    partition_file = context.node_config["partition-file"]
+    _, testloader = load_data(partition_file)
 
-    # Call the evaluation function
-    eval_loss, eval_acc = test_fn(
+    # Evaluate the model
+    eval_loss, eval_acc = test(
         model,
-        valloader,
+        testloader,
         device,
-        "metrics_client.json",
-        1
+        file_name="metrics_client.json",
+        server_round=1
     )
 
-    # Construct and return reply Message
     metrics = {
         "eval_loss": eval_loss,
         "eval_acc": eval_acc,
-        "num-examples": len(valloader.dataset),
+        "num-examples": len(testloader.dataset),
     }
     metric_record = MetricRecord(metrics)
     content = RecordDict({"metrics": metric_record})

@@ -15,12 +15,12 @@ REPO_DIR="$HOME/latebloomers"
 COMMAND=$1; shift
 NAME_SUFFIX=""
 USE_FLWR_DATASETS=false
-CPUS=8; MEM=46G; QOS=cpu_qos; PARTITION_ARGS="#SBATCH --partition=cpu"; VENV_NAME="hackathon-venv-cpu"
+CPUS=8; MEM=46G; QOS=cpu_qos; PARTITION_ARGS="#SBATCH --partition=cpu"; VENV_NAME="hackathon-venv-cpu"; TIME_LIMIT="00:20:00"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --gpu) CPUS=6; MEM=120G; QOS=gpu_qos; PARTITION_ARGS="#SBATCH --gres=gpu:1
-#SBATCH --partition=gpu"; VENV_NAME="hackathon-venv"; shift ;;
+#SBATCH --partition=gpu"; VENV_NAME="hackathon-venv"; TIME_LIMIT="00:20:00"; shift ;;
     --flwrdatasets) USE_FLWR_DATASETS=true; shift ;;
     --name) NAME_SUFFIX="$2"; shift 2 ;;
     *) shift ;;
@@ -45,7 +45,7 @@ JOB_ID=$(sbatch --parsable <<EOF
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --mem=${MEM}
 #SBATCH --qos=${QOS}
-#SBATCH --time=00:15:00
+#SBATCH --time=${TIME_LIMIT}
 ${PARTITION_ARGS}
 
 set -e
@@ -60,7 +60,7 @@ cleanup() {
   MODELS_SCRATCH="\$SCRATCH_DIR/repo/models"
   if [ -d "\$MODELS_SCRATCH" ]; then
     BEST=\$(ls \$MODELS_SCRATCH/*.pt 2>/dev/null | sed 's/.*_auroc\\([0-9]\\{4\\}\\)\\.pt/\\1 &/' | sort -rn | head -1 | cut -d' ' -f2-)
-    [ -n "\$BEST" ] && cp "\$BEST" /home/${USER}/models/ && echo "  \$(basename \$BEST)"
+    [ -n "\$BEST" ] && cp "\$BEST" /home/\${USER}/models/ && echo "  \$(basename \$BEST)"
   fi
   rm -rf "\$SCRATCH_DIR"
   echo "=== Job \${SLURM_JOB_ID} finished with exit code \$exit_code ==="
@@ -69,11 +69,11 @@ cleanup() {
 trap cleanup EXIT
 
 rsync -a "${REPO_DIR}/" "\$SCRATCH_DIR/repo/" && cd "\$SCRATCH_DIR/repo"
-source /home/$USER/${VENV_NAME}/bin/activate
+source /home/\${USER}/${VENV_NAME}/bin/activate
 
 # Export environment
 export JOB_NAME="job\${SLURM_JOB_ID}_${NAME_SUFFIX}"
-export DATASET_DIR="/home/${USER}/xray-data"
+export DATASET_DIR="/home/\${USER}/xray-data"
 export JOB_SCRATCH="\${SLURM_TMPDIR:-\${TMPDIR:-/tmp}}/job-\${SLURM_JOB_ID}"
 export MIOPEN_CUSTOM_CACHE_DIR="\$JOB_SCRATCH/miopen-cache"
 export MIOPEN_USER_DB_PATH="\$JOB_SCRATCH/miopen-db"
@@ -84,7 +84,7 @@ if [ "${USE_FLWR_DATASETS}" = "true" ]; then
   export USE_FLWR_DATASETS=1
 fi
 
-mkdir -p /home/${USER}/models "\$JOB_SCRATCH" "\$MIOPEN_CUSTOM_CACHE_DIR" "\$MIOPEN_USER_DB_PATH" "\$XDG_CACHE_HOME"
+mkdir -p /home/\${USER}/models "\$JOB_SCRATCH" "\$MIOPEN_CUSTOM_CACHE_DIR" "\$MIOPEN_USER_DB_PATH" "\$XDG_CACHE_HOME"
 
 echo "=== Running: ${COMMAND} ==="
 ${COMMAND}

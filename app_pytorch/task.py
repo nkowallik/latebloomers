@@ -1,14 +1,17 @@
 """app-pytorch: A Flower / PyTorch app."""
 
 import torch
+import os
 import torch.nn as nn
 import torch.nn.functional as F
+import json
 from datasets import load_dataset
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Normalize, ToTensor
 
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 class Net(nn.Module):
     """Model (simple CNN adapted from 'PyTorch: A 60 Minute Blitz')"""
@@ -89,19 +92,63 @@ def train(net, trainloader, epochs, lr, device):
     avg_trainloss = running_loss / len(trainloader)
     return avg_trainloss
 
+def save_metrics_to_json(precision, recall, f1, accuracy, loss, filepath, iteration):
+    if os.path.exists(filepath):
+        with open(filepath, "r") as f:
+            data = json.load(f)
+    else:
+        data = {}
 
-def test(net, testloader, device):
+    data[str(iteration)] = {
+        "accuracy": float(accuracy),
+        "loss": float(loss),
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
+    }
+
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=4)
+
+def test(net, testloader, device, file_name, server_round):
     """Validate the model on the test set."""
     net.to(device)
+    net.eval()  # make sure we're in eval mode
+
     criterion = torch.nn.CrossEntropyLoss()
-    correct, loss = 0, 0.0
+    correct, loss_sum = 0, 0.0
+
+    all_labels = []
+    all_preds = []
+
     with torch.no_grad():
         for batch in testloader:
             images = batch["img"].to(device)
             labels = batch["label"].to(device)
+
             outputs = net(images)
-            loss += criterion(outputs, labels).item()
-            correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
+
+            # loss and accuracy
+            loss_sum += criterion(outputs, labels).item()
+            preds = torch.max(outputs.data, 1)[1]
+            correct += (preds == labels).sum().item()
+
+            # store for precision/F1
+            all_labels.append(labels.cpu())
+            all_preds.append(preds.cpu())
+
+    # basic metrics
     accuracy = correct / len(testloader.dataset)
-    loss = loss / len(testloader)
+    loss = loss_sum / len(testloader)
+
+    # stack all labels/preds and compute extra metrics
+    y_true = torch.cat(all_labels).numpy()
+    y_pred = torch.cat(all_preds).numpy()
+
+    # multi-class: macro average; change to "binary" or "weighted" if needed
+    precision = precision_score(y_true, y_pred, average="macro", zero_division=0)
+    recall    = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
+    save_metrics_to_json(precision, recall, f1, accuracy, loss, file_name, server_round)
+
     return loss, accuracy

@@ -1,3 +1,6 @@
+Sadly we do not have the trained model or evaluation data since we were to slow :(
+
+The Project is based on the app-pytorch.
 ---
 tags: [basic, vision]
 dataset: [CIFAR-10]

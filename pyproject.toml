@@ -30,10 +30,14 @@ fraction-train = 0.5
 local-epochs = 1
 
 [tool.flwr.federations]
+<<<<<<< Updated upstream
 default = "cluster-cpu" # it will be gpu though, name doesn't matter
+=======
+default = "local-simulation"
+>>>>>>> Stashed changes
 
 [tool.flwr.federations.local-simulation]
-options.num-supernodes = 10
+options.num-supernodes = 2
 
 [tool.flwr.federations.cluster-cpu]
 options.num-supernodes = 10

@@ -100,7 +100,7 @@ def save_metrics_to_json(precision, recall, f1, accuracy, loss, filepath, iterat
         data = {}
 
     data[str(iteration)] = {
-        "accuracy": float(loss),
+        "accuracy": float(accuracy),
         "loss": float(loss),
         "precision": float(precision),
         "recall": float(recall),

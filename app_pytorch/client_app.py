@@ -12,7 +12,6 @@ from app_pytorch.task import train as train_fn
 app = ClientApp()
 
 # iteration
-iteration = 0
 
 
 @app.train()
@@ -73,7 +72,6 @@ def evaluate(msg: Message, context: Context):
         "metrics_client.json",
         1
     )
-    iteration+= 1
 
     # Construct and return reply Message
     metrics = {

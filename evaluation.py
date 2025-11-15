@@ -2,6 +2,7 @@
 import json
 import argparse
 import matplotlib.pyplot as plt
+import time
 
 
 def load_metrics(json_path: str):
@@ -71,16 +72,18 @@ def main():
     parser = argparse.ArgumentParser(
         description="Plot training metrics (accuracy, loss, precision, recall, f1) per round."
     )
+    today = time.time()
+    name = f"images/{today}-metrics.png"
     parser.add_argument(
         "--input",
         type=str,
-        default="metrics.json",
+        default="metrics_server.json",
         help="Path to metrics JSON file.",
     )
     parser.add_argument(
         "--output",
         type=str,
-        default="metrics_per_round.png",
+        default=name,
         help="Path to save output plot image.",
     )
     args = parser.parse_args()
